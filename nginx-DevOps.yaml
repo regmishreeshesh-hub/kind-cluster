@@ -1,0 +1,583 @@
+# create namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nginx-devops
+---
+# create simple html page to load in nginx as congigmap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-devops
+  namespace: nginx-devops
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Shreeshesh Regmi - DevOps Engineer</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+          font-family: 'Inter', sans-serif;
+          min-height: 100vh;
+          background: #0a0e27;
+          color: white;
+          padding: 4rem 2rem;
+          overflow-x: hidden;
+          position: relative;
+        }
+        
+        body::before {
+          content: '';
+          position: fixed;
+          top: 0; left: 0;
+          width: 100%; height: 100%;
+          background: 
+            radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.2) 0%, transparent 50%),
+            linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+          z-index: -1;
+          animation: gradientShift 15s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.8; }
+        }
+        
+        .container {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 2rem 1rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          min-height: 100vh;
+          position: relative;
+          z-index: 1;
+        }
+        
+        header {
+          text-align: center;
+          width: 100%;
+          max-width: 900px;
+          margin: 0 auto 5rem auto;
+          position: relative;
+          padding: 3rem 1rem;
+          animation: fadeInDown 1.5s ease-out;
+        }
+        
+        .name {
+          font-size: clamp(3rem, 8vw, 6rem);
+          font-weight: 900;
+          letter-spacing: 2px;
+          color: #FF6B35;
+          text-shadow: 
+            0 0 10px rgba(255, 107, 53, 0.7),
+            0 0 20px rgba(255, 107, 53, 0.5),
+            0 0 40px rgba(255, 107, 53, 0.3);
+          background: linear-gradient(90deg, #FF6B35, #FF8C00, #FF4500, #FF6B35);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: 
+            glowPulse 3s ease-in-out infinite,
+            textShimmer 8s linear infinite;
+          display: inline-block;
+        }
+        
+        @keyframes glowPulse {
+          0%, 100% { text-shadow: 0 0 10px rgba(255,107,53,0.7), 0 0 20px rgba(255,107,53,0.5); }
+          50%      { text-shadow: 0 0 25px rgba(255,107,53,1),   0 0 50px rgba(255,107,53,0.7); }
+        }
+        
+        @keyframes textShimmer {
+          0%   { background-position: -500% 0; }
+          100% { background-position: 500%  0; }
+        }
+        
+        h1 {
+          font-size: clamp(3.5rem, 9vw, 7rem);
+          font-weight: 800;
+          margin: 0.5rem 0 1.5rem 0;
+          background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #667eea, #a78bfa, #667eea);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: gradientFlow 6s ease infinite;
+          text-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+          letter-spacing: -1px;
+        }
+        
+        @keyframes gradientFlow {
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        
+        .contact-info {
+          margin: 2rem 0 4rem 0;
+          font-size: clamp(1.2rem, 3vw, 1.5rem);
+          color: rgba(255,255,255,0.95);
+          font-weight: 500;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          justify-content: center;
+        }
+        
+        .contact-info p {
+          position: relative;
+          display: inline-block;
+          padding: 0.4rem 1.2rem;
+          border-radius: 50px;
+          background: rgba(255,255,255,0.05);
+          transition: all 0.4s ease;
+        }
+        
+        .contact-info p:hover {
+          background: rgba(102, 126, 234, 0.15);
+          transform: translateY(-3px);
+          box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .contact-info p::before {
+          content: '';
+          position: absolute;
+          bottom: -4px;
+          left: 50%;
+          width: 0;
+          height: 3px;
+          background: linear-gradient(90deg, #667eea, #f093fb);
+          transition: width 0.4s ease, left 0.4s ease;
+        }
+        
+        .contact-info p:hover::before {
+          width: 80%;
+          left: 10%;
+        }
+        
+        header::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 60%;
+          max-width: 500px;
+          height: 4px;
+          background: linear-gradient(90deg, transparent, #667eea, #f093fb, transparent);
+          filter: blur(8px);
+          opacity: 0.6;
+        }
+        
+        .skill-grid {
+          display: grid;
+          gap: 1.5rem;
+          width: 100%;
+          max-width: 900px;
+          animation: fadeInUp 1s ease 0.3s both;
+        }
+        
+        .skill-item {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 20px;
+          overflow: hidden;
+          backdrop-filter: blur(20px);
+          box-shadow: 
+            0 8px 32px rgba(0,0,0,0.3),
+            inset 0 1px 0 rgba(255,255,255,0.1);
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+        }
+        
+        .skill-item::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, transparent, var(--glow-color), transparent);
+          opacity: 0;
+          transition: opacity 0.4s;
+        }
+        
+        .skill-item:hover {
+          transform: translateY(-8px) scale(1.02);
+          box-shadow: 
+            0 20px 60px rgba(0,0,0,0.4),
+            0 0 0 1px rgba(255,255,255,0.2),
+            inset 0 1px 0 rgba(255,255,255,0.2);
+          border-color: rgba(255,255,255,0.3);
+        }
+        
+        .skill-item:hover::before {
+          opacity: 1;
+        }
+        
+        .skill-btn {
+          width: 100%;
+          padding: 2rem 2.5rem;
+          font-size: 1.3rem;
+          font-weight: 700;
+          color: white;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          transition: all 0.3s;
+          letter-spacing: 1.5px;
+        }
+        
+        .skill-btn-content {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        
+        .skill-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.5rem;
+          transition: all 0.3s;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .skill-item:hover .skill-icon {
+          transform: scale(1.1) rotate(5deg);
+        }
+        
+        .arrow {
+          font-size: 1.5rem;
+          transition: transform 0.4s ease;
+          opacity: 0.7;
+        }
+        
+        .skill-btn.active .arrow {
+          transform: rotate(180deg);
+          opacity: 1;
+        }
+        
+        .skill-content {
+          max-height: 0;
+          overflow: hidden;
+          padding: 0 2.5rem;
+          background: rgba(0,0,0,0.3);
+          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          opacity: 0;
+        }
+        
+        .skill-content.active {
+          max-height: 400px;
+          padding: 2rem 2.5rem 2.5rem;
+          opacity: 1;
+        }
+        
+        .desc {
+          font-size: 1.1rem;
+          line-height: 1.8;
+          color: rgba(255,255,255,0.85);
+          font-weight: 300;
+        }
+        
+        /* Skill-specific glow colors */
+        .skill-item:nth-child(1) { --glow-color: #667eea; }
+        .skill-item:nth-child(1) .skill-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        
+        .skill-item:nth-child(2) { --glow-color: #FF512F; }
+        .skill-item:nth-child(2) .skill-icon { background: linear-gradient(135deg, #FF512F 0%, #DD2476 100%); }
+        
+        .skill-item:nth-child(3) { --glow-color: #11998e; }
+        .skill-item:nth-child(3) .skill-icon { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        
+        .skill-item:nth-child(4) { --glow-color: #326ce5; }
+        .skill-item:nth-child(4) .skill-icon { background: linear-gradient(135deg, #1a2980 0%, #326ce5 100%); }
+        
+        .skill-item:nth-child(5) { --glow-color: #f7971e; }
+        .skill-item:nth-child(5) .skill-icon { background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%); }
+        
+        .skill-item:nth-child(6) { --glow-color: #56ab2f; }
+        .skill-item:nth-child(6) .skill-icon { background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); }
+        
+        .skill-item:nth-child(7) { --glow-color: #ED213A; }
+        .skill-item:nth-child(7) .skill-icon { background: linear-gradient(135deg, #93291E 0%, #ED213A 100%); }
+        
+        .skill-item:nth-child(8) { --glow-color: #8E2DE2; }
+        .skill-item:nth-child(8) .skill-icon { background: linear-gradient(135deg, #4A00E0 0%, #8E2DE2 100%); }
+        
+        .skill-item:nth-child(9) { --glow-color: #e74c3c; }
+        .skill-item:nth-child(9) .skill-icon { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); }
+        
+        /* Floating particles */
+        .particle {
+          position: fixed;
+          width: 3px;
+          height: 3px;
+          background: white;
+          border-radius: 50%;
+          pointer-events: none;
+          opacity: 0;
+          animation: float-particle 4s ease-in infinite;
+        }
+        
+        @keyframes float-particle {
+          0%   { transform: translateY(100vh) translateX(0); opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(-100vh) translateX(100px); opacity: 0; }
+        }
+        
+        @keyframes fadeInDown {
+          from { opacity: 0; transform: translateY(-30px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        
+        @media (max-width: 768px) {
+          body { padding: 2rem 1rem; }
+          .skill-btn { padding: 1.5rem 1.5rem; font-size: 1.1rem; }
+          .skill-icon { width: 40px; height: 40px; font-size: 1.2rem; }
+          .skill-content.active { padding: 1.5rem 1.5rem 2rem; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <header>
+          <div class="name">Shreeshesh Regmi</div>
+          <h1>DevOps Engineer</h1>
+          <div class="contact-info">
+            <p>📧 devops@company.com</p>
+            <p>📱 +1 (555) 123-4567</p>
+          </div>
+        </header>
+
+        <div class="skill-grid">
+          <div class="skill-item">
+            <button class="skill-btn" data-target="foundations">
+              <div class="skill-btn-content">
+                <div class="skill-icon">🏗️</div>
+                <span>FOUNDATIONS</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="foundations">
+              <p class="desc">Installation: Linux distros (Ubuntu, RHEL/Rocky, Debian), partitioning, GRUB, RAID<br>Config: Networking (IP, DNS, NTP), storage (LVM, ext4/xfs), systemd, kernel tuning<br>Users: Account mgmt, sudo, SSH keys, PAM policies<br>Packages: apt/dnf, repos, security updates<br>Security: Firewalls, SELinux/AppArmor, fail2ban, certificates, Lynis<br>Monitoring: top/htop, iostat, logs (journalctl), alerting<br>Backup: rsync, tar, restic, test restores<br>Troubleshooting: Boot issues, strace, SMART checks, OOM debugging</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="automation">
+              <div class="skill-btn-content">
+                <div class="skill-icon">⚡</div>
+                <span>AUTOMATION & SCRIPTING</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="automation">
+              <p class="desc">Python, Bash<br>Automate repetitive tasks, API interactions, custom tooling</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="containers">
+              <div class="skill-btn-content">
+                <div class="skill-icon">📦</div>
+                <span>CONTAINERIZATION</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="containers">
+              <p class="desc">Docker: Writing Dockerfiles, multi-stage builds<br>docker-compose, image optimization<br>Container debugging, registries</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="orchestration">
+              <div class="skill-btn-content">
+                <div class="skill-icon">☸️</div>
+                <span>KUBERNETES</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="orchestration">
+              <p class="desc">Pods, Deployments, Services, Ingress<br>ConfigMaps/Secrets, Helm charts, operators<br>Namespaces, RBAC, StatefulSets</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="pipelines">
+              <div class="skill-btn-content">
+                <div class="skill-icon">🔄</div>
+                <span>CI/CD & GITOPS</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="pipelines">
+              <p class="desc">GitHub Actions, GitLab CI/CD, ArgoCD, Flux, Jenkins<br>Pipelines as code, GitOps workflows<br>Automated testing & deployment</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="cloud">
+              <div class="skill-btn-content">
+                <div class="skill-icon">☁️</div>
+                <span>CLOUD PLATFORMS</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="cloud">
+              <p class="desc">AWS, Azure, GCP, OCI, Linode, DigitalOcean<br>EC2/EKS, IAM, VPC, S3, Lambda<br>Cost optimization, multi-cloud awareness</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="observability">
+              <div class="skill-btn-content">
+                <div class="skill-icon">📊</div>
+                <span>OBSERVABILITY</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="observability">
+              <p class="desc">Prometheus + Grafana, Loki, ELK/PLG stack, TIG stack<br>OpenTelemetry, distributed tracing<br>SLOs, alerting that actually helps</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="iac">
+              <div class="skill-btn-content">
+                <div class="skill-icon">🏗️</div>
+                <span>INFRASTRUCTURE AS CODE</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="iac">
+              <p class="desc">Terraform / OpenTofu / Pulumi / Terragrunt<br>Ansible / Chef / Puppet<br>Version control infrastructure, reproducible environments</p>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <button class="skill-btn" data-target="devsecops">
+              <div class="skill-btn-content">
+                <div class="skill-icon">🔐</div>
+                <span>DEVSECOPS</span>
+              </div>
+              <span class="arrow">↓</span>
+            </button>
+            <div class="skill-content" id="devsecops">
+              <p class="desc">Dependency/Container scanning: Snyk, Trivy, Aqua<br>SAST: SonarQube, Checkmarx<br>IaC Security: Checkov, tfsec<br>Runtime: Sysdig, Falco<br>Secrets: Vault, SOPS<br>Policy: OPA/Gatekeeper, Kyverno</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        // Accordion functionality
+        const buttons = document.querySelectorAll('.skill-btn');
+        buttons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            const content = document.getElementById(targetId);
+            const isActive = content.classList.contains('active');
+
+            document.querySelectorAll('.skill-content.active').forEach(el => {
+              if (el !== content) el.classList.remove('active');
+            });
+            document.querySelectorAll('.skill-btn.active').forEach(el => {
+              if (el !== btn) el.classList.remove('active');
+            });
+
+            if (isActive) {
+              content.classList.remove('active');
+              btn.classList.remove('active');
+            } else {
+              content.classList.add('active');
+              btn.classList.add('active');
+            }
+          });
+        });
+
+        // Floating particles
+        function createParticle() {
+          const particle = document.createElement('div');
+          particle.className = 'particle';
+          particle.style.left = Math.random() * 100 + '%';
+          particle.style.animationDelay = Math.random() * 4 + 's';
+          particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+          document.body.appendChild(particle);
+          setTimeout(() => particle.remove(), 7000);
+        }
+
+        setInterval(createParticle, 300);
+        for(let i = 0; i < 10; i++) {
+          setTimeout(createParticle, i * 100);
+        }
+      </script>
+    </body>
+    </html>
+---
+# nginx-test.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-devops
+  namespace: nginx-devops 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-devops
+  template:
+    metadata:
+      labels:
+        app: nginx-devops
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html/
+          readOnly: true
+        
+      volumes:
+      - name: html
+        configMap:
+          name: nginx-devops
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-devops
+  namespace: nginx-devops
+spec:
+  type: NodePort
+  selector:
+    app: nginx-devops
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    nodePort: 30001

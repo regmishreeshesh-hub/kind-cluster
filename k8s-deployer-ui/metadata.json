@@ -1,0 +1,5 @@
+{
+  "name": "K8s Deployer UI",
+  "description": "A visual interactive configuration tool for generating Kind/Kubernetes deployment scripts from Git repositories.",
+  "requestFramePermissions": []
+}

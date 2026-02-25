@@ -1,0 +1,165 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2025-05-01T08:10:04Z"
+    labels:
+      kubernetes.io/metadata.name: default
+    name: default
+    resourceVersion: "65"
+    uid: 3602913a-ea1b-4cf1-a99d-b9cef50c8e1c
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"labels":{"app.kubernetes.io/instance":"ingress-nginx","app.kubernetes.io/name":"ingress-nginx"},"name":"ingress-nginx"}}
+    creationTimestamp: "2025-05-01T08:10:38Z"
+    labels:
+      app.kubernetes.io/instance: ingress-nginx
+      app.kubernetes.io/name: ingress-nginx
+      kubernetes.io/metadata.name: ingress-nginx
+    name: ingress-nginx
+    resourceVersion: "518297"
+    uid: d2ef2dc1-f367-468c-8f71-1b824a2d50ef
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2025-09-01T09:18:59Z"
+    labels:
+      kubernetes.io/metadata.name: jenkins
+    name: jenkins
+    resourceVersion: "3937363"
+    uid: 74c6c737-01d0-4b51-adb9-c3e3ddb272ff
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2025-05-01T08:10:04Z"
+    labels:
+      kubernetes.io/metadata.name: kube-node-lease
+    name: kube-node-lease
+    resourceVersion: "67"
+    uid: aaa9b43c-295c-4f49-8c2b-dfed01e1826a
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2025-05-01T08:10:04Z"
+    labels:
+      kubernetes.io/metadata.name: kube-public
+    name: kube-public
+    resourceVersion: "35"
+    uid: 01747e0a-ad8d-40ba-af4a-a7d2c4654377
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2025-05-01T08:10:04Z"
+    labels:
+      kubernetes.io/metadata.name: kube-system
+    name: kube-system
+    resourceVersion: "4"
+    uid: b0c4c011-98ae-4353-9439-4bce8e439a44
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"local-path-storage"}}
+    creationTimestamp: "2025-05-01T08:10:09Z"
+    labels:
+      kubernetes.io/metadata.name: local-path-storage
+    name: local-path-storage
+    resourceVersion: "276"
+    uid: 06cfc582-cc1e-403e-819c-06671d18b77b
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"labels":{"pod-security.kubernetes.io/audit":"privileged","pod-security.kubernetes.io/enforce":"privileged","pod-security.kubernetes.io/warn":"privileged"},"name":"metallb-system"}}
+    creationTimestamp: "2025-12-02T04:38:58Z"
+    labels:
+      kubernetes.io/metadata.name: metallb-system
+      pod-security.kubernetes.io/audit: privileged
+      pod-security.kubernetes.io/enforce: privileged
+      pod-security.kubernetes.io/warn: privileged
+    name: metallb-system
+    resourceVersion: "6267556"
+    uid: 65c20ff9-835f-46bd-88d7-99cde7fab1d7
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"monitoring"}}
+    creationTimestamp: "2025-05-01T08:10:51Z"
+    labels:
+      kubernetes.io/metadata.name: monitoring
+    name: monitoring
+    resourceVersion: "731"
+    uid: 5b359824-50b9-4b47-a9cc-56c7b5fd05e8
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"ollama"}}
+    creationTimestamp: "2025-06-19T09:26:57Z"
+    labels:
+      kubernetes.io/metadata.name: ollama
+    name: ollama
+    resourceVersion: "1576118"
+    uid: 8cbb0ce2-b8ec-4fe3-aa19-e5adf628a3a5
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+kind: List
+metadata:
+  resourceVersion: ""

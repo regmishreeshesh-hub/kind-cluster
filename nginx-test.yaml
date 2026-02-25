@@ -1,0 +1,189 @@
+# create namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nginx-test
+---
+# create simple html page to load in nginx as congigmap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-test
+  namespace: nginx-test
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Interactive Nginx Test</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Inter', sans-serif;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+          overflow: hidden;
+          color: white;
+        }
+        .container { 
+          text-align: center; 
+          z-index: 10; 
+          padding: 3rem; 
+          background: rgba(255,255,255,0.1); 
+          backdrop-filter: blur(20px); 
+          border-radius: 24px; 
+          border: 1px solid rgba(255,255,255,0.2); 
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3); 
+          max-width: 800px;
+          animation: fadeInUp 0.8s ease-out;
+        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        
+        h1 { font-size: 3.5rem; margin-bottom: 2rem; text-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: 700; }
+        
+        .btn-group { display: flex; gap: 2rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; }
+        .btn {
+          padding: 1.2rem 2.5rem;
+          font-size: 1.2rem;
+          font-weight: 700;
+          border: none;
+          border-radius: 50px;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+          color: white;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .btn:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+        .btn:active { transform: scale(0.95); }
+        
+        .btn-1 { background: linear-gradient(135deg, #FF512F 0%, #DD2476 100%); }
+        .btn-2 { background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%); }
+        .btn-3 { background: linear-gradient(135deg, #ffe259 0%, #ffa751 100%); color: #333; }
+
+        .overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: rgba(0,0,0,0.9);
+          backdrop-filter: blur(15px);
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
+          z-index: 100;
+        }
+        .overlay.active { opacity: 1; pointer-events: all; }
+        
+        .big-message {
+          font-size: 6rem; font-weight: 900; color: #fff;
+          text-align: center; margin-bottom: 4rem;
+          line-height: 1.1;
+          text-shadow: 0 0 30px rgba(255,255,255,0.3);
+          transform: scale(0.8) translateY(50px); 
+          transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          opacity: 0;
+        }
+        .overlay.active .big-message { transform: scale(1) translateY(0); opacity: 1; transition-delay: 0.1s; }
+        
+        .exit-btn {
+          padding: 1rem 4rem; font-size: 1.5rem;
+          background: transparent; 
+          border: 3px solid rgba(255,255,255,0.6);
+          color: white; border-radius: 50px; cursor: pointer; 
+          font-weight: 700;
+          transition: all 0.3s;
+          opacity: 0; transform: translateY(20px);
+        }
+        .overlay.active .exit-btn { opacity: 1; transform: translateY(0); transition-delay: 0.3s; }
+        .exit-btn:hover { background: white; color: #1e3c72; border-color: white; box-shadow: 0 0 20px rgba(255,255,255,0.4); }
+        
+        /* Floating shapes */
+        .shape { position: absolute; background: rgba(255,255,255,0.05); border-radius: 50%; pointer-events: none; animation: float 20s infinite; }
+        .s1 { width: 300px; height: 300px; top: -100px; left: -100px; }
+        .s2 { width: 400px; height: 400px; bottom: -100px; right: -100px; animation-delay: -5s; }
+        .s3 { width: 150px; height: 150px; top: 40%; right: 10%; animation-delay: -10s; background: rgba(255,255,255,0.03); }
+        @keyframes float { 0%{transform:translate(0,0) rotate(0deg);} 50%{transform:translate(50px, 50px) rotate(180deg);} 100%{transform:translate(0,0) rotate(360deg);} }
+      </style>
+    </head>
+    <body>
+      <div class="shape s1"></div>
+      <div class="shape s2"></div>
+      <div class="shape s3"></div>
+      
+      <div class="container">
+        <h1>Kubernetes deployment of Nginx</h1>
+        <div class="btn-group">
+          <button class="btn btn-1" onclick="show('PORT:\n30001')">NODEPORT</button>
+          <button class="btn btn-2" onclick="show('TYPE:\nNodePort')">SERVICE</button>
+          <button class="btn btn-3" onclick="show('STATUS:\nActive')">STATUS</button>
+          <button class="btn btn-1" onclick="show('NS:\nnginx-test')">NAMESPACE</button>
+        </div>
+      </div>
+
+      <div id="overlay" class="overlay">
+        <div id="message" class="big-message">MESSAGE</div>
+        <button class="exit-btn" onclick="hide()">EXIT</button>
+      </div>
+
+      <script>
+        function show(msg) {
+          const text = msg.replace(/\n/g, '<br>');
+          document.getElementById('message').innerHTML = text;
+          document.getElementById('overlay').classList.add('active');
+        }
+        function hide() {
+          document.getElementById('overlay').classList.remove('active');
+        }
+      </script>
+    </body>
+    </html>
+---
+# nginx-test.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-test
+  namespace: nginx-test 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-test
+  template:
+    metadata:
+      labels:
+        app: nginx-test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html/
+          readOnly: true
+        
+      volumes:
+      - name: html
+        configMap:
+          name: nginx-test
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-test
+  namespace: nginx-test
+spec:
+  type: NodePort
+  selector:
+    app: nginx-test
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    nodePort: 30001

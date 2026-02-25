@@ -1,0 +1,154 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30051
+        hostPort: 30051
+        protocol: TCP
+      - containerPort: 30052
+        hostPort: 30052
+        protocol: TCP
+      - containerPort: 30053
+        hostPort: 30053
+        protocol: TCP
+      - containerPort: 30054
+        hostPort: 30054
+        protocol: TCP
+      - containerPort: 30055
+        hostPort: 30055
+        protocol: TCP
+      - containerPort: 30056
+        hostPort: 30056
+        protocol: TCP
+      - containerPort: 30057
+        hostPort: 30057
+        protocol: TCP
+      - containerPort: 30058
+        hostPort: 30058
+        protocol: TCP
+      - containerPort: 30059
+        hostPort: 30059
+        protocol: TCP
+      - containerPort: 30060
+        hostPort: 30060
+        protocol: TCP
+      - containerPort: 30061
+        hostPort: 30061
+        protocol: TCP
+      - containerPort: 30062
+        hostPort: 30062
+        protocol: TCP
+      - containerPort: 30063
+        hostPort: 30063
+        protocol: TCP
+      - containerPort: 30064
+        hostPort: 30064
+        protocol: TCP
+      - containerPort: 30065
+        hostPort: 30065
+        protocol: TCP
+      - containerPort: 30066
+        hostPort: 30066
+        protocol: TCP
+      - containerPort: 30067
+        hostPort: 30067
+        protocol: TCP
+      - containerPort: 30068
+        hostPort: 30068
+        protocol: TCP
+      - containerPort: 30069
+        hostPort: 30069
+        protocol: TCP
+      - containerPort: 30070
+        hostPort: 30070
+        protocol: TCP
+      - containerPort: 30071
+        hostPort: 30071
+        protocol: TCP
+      - containerPort: 30072
+        hostPort: 30072
+        protocol: TCP
+      - containerPort: 30073
+        hostPort: 30073
+        protocol: TCP
+      - containerPort: 30074
+        hostPort: 30074
+        protocol: TCP
+      - containerPort: 30075
+        hostPort: 30075
+        protocol: TCP
+      - containerPort: 30076
+        hostPort: 30076
+        protocol: TCP
+      - containerPort: 30077
+        hostPort: 30077
+        protocol: TCP
+      - containerPort: 30078
+        hostPort: 30078
+        protocol: TCP
+      - containerPort: 30079
+        hostPort: 30079
+        protocol: TCP
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      - containerPort: 30081
+        hostPort: 30081
+        protocol: TCP
+      - containerPort: 30082
+        hostPort: 30082
+        protocol: TCP
+      - containerPort: 30083
+        hostPort: 30083
+        protocol: TCP
+      - containerPort: 30084
+        hostPort: 30084
+        protocol: TCP
+      - containerPort: 30085
+        hostPort: 30085
+        protocol: TCP
+      - containerPort: 30086
+        hostPort: 30086
+        protocol: TCP
+      - containerPort: 30087
+        hostPort: 30087
+        protocol: TCP
+      - containerPort: 30088
+        hostPort: 30088
+        protocol: TCP
+      - containerPort: 30089
+        hostPort: 30089
+        protocol: TCP
+      - containerPort: 30090
+        hostPort: 30090
+        protocol: TCP
+      - containerPort: 30091
+        hostPort: 30091
+        protocol: TCP
+      - containerPort: 30092
+        hostPort: 30092
+        protocol: TCP
+      - containerPort: 30093
+        hostPort: 30093
+        protocol: TCP
+      - containerPort: 30094
+        hostPort: 30094
+        protocol: TCP
+      - containerPort: 30095
+        hostPort: 30095
+        protocol: TCP
+      - containerPort: 30096
+        hostPort: 30096
+        protocol: TCP
+      - containerPort: 30097
+        hostPort: 30097
+        protocol: TCP
+      - containerPort: 30098
+        hostPort: 30098
+        protocol: TCP
+      - containerPort: 30099
+        hostPort: 30099
+        protocol: TCP
+  - role: worker
+  - role: worker
