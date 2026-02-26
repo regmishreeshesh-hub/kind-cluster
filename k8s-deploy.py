@@ -176,6 +176,7 @@ class K8sDeployer:
         self.auto_apply = False
         self.db_pvc_enabled = True
         self.db_pvc_size = "1Gi"
+        self.setup_ingress = False
 
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.base_dir = ""
@@ -633,7 +634,17 @@ class K8sDeployer:
             print_success(f"Loaded image {tag}")
 
     def _parse_compose_db_service(self):
-        compose_files = sorted(self.detected_files["docker-compose.yml"])
+        """
+        Parse database service from docker-compose.yml files.
+        Only checks the main docker-compose.yml file, ignoring test/dev variants.
+        """
+        # Only check the main docker-compose.yml file (not test.yml, dev.yml, etc.)
+        compose_files = []
+        for compose_path in sorted(self.detected_files["docker-compose.yml"]):
+            filename = os.path.basename(compose_path)
+            if filename == "docker-compose.yml" or filename == "docker-compose.yaml":
+                compose_files.append(compose_path)
+        
         for compose_path in compose_files:
             try:
                 with open(compose_path, "r", encoding="utf-8", errors="ignore") as handle:
@@ -844,9 +855,27 @@ class K8sDeployer:
         if not self.detected_files[".env"] and not self.config_vars and not self.secret_vars:
             print_warning("No .env or discovered env vars found. Skipping ConfigMap/Secret creation.")
 
-        create_pvc = False
-        pvc_size = self.db_pvc_size
-        if self.detected_files["init.sql"]:
+        # Check for SSL requirements
+        ssl_required, ssl_folder_exists, dockerfile_exposes_443, ssl_files = self.check_ssl_requirements()
+        if ssl_required:
+            print_success("SSL requirements detected in project:")
+            if ssl_folder_exists:
+                print(f"  ✓ SSL folder exists")
+            if dockerfile_exposes_443:
+                print(f"  ✓ Port 443/HTTPS exposed in Dockerfile")
+            if ssl_files:
+                print(f"  ✓ {len(ssl_files)} SSL-related files found")
+            
+            # Create SSL certificates for the application
+            self.create_ssl_certificate(force_create=True)
+
+        self.compose_db = self._parse_compose_db_service()
+        
+        # Only create database resources if both database service AND init.sql file are found
+        if self.compose_db and self.detected_files["init.sql"]:
+            # Handle PVC creation
+            create_pvc = False
+            pvc_size = self.db_pvc_size
             create_pvc = self.db_pvc_enabled
             if not self.non_interactive:
                 create_pvc = self._prompt_yes_no("Create DB PVC", default=True)
@@ -864,9 +893,6 @@ class K8sDeployer:
                     },
                 }
                 self._write_manifest(f"{self.repo_name}-pvc.yaml", pvc)
-
-        self.compose_db = self._parse_compose_db_service()
-        if self.compose_db:
             self.service_name_by_component[self.compose_db["component"]] = self.compose_db["service_name"]
             db_container = {
                 "name": self.compose_db["component"],
@@ -929,7 +955,7 @@ class K8sDeployer:
             )
 
         self.services = []
-        if self.compose_db:
+        if self.compose_db and self.detected_files["init.sql"]:
             self.services.append(
                 {
                     "name": self.compose_db["service_name"],
@@ -1075,7 +1101,8 @@ class K8sDeployer:
             }
             self._write_manifest(f"{self.repo_name}-ingress.yaml", ingress)
 
-        if self.detected_files["init.sql"]:
+        # Only create database initialization job if both init.sql AND database service are found
+        if self.detected_files["init.sql"] and self.compose_db:
             sql_data = {}
             for idx, sql_path in enumerate(self.detected_files["init.sql"], start=1):
                 with open(sql_path, "r", encoding="utf-8", errors="ignore") as handle:
@@ -1193,7 +1220,7 @@ class K8sDeployer:
             except Exception:
                 pass
 
-        if self.compose_db:
+        if self.compose_db and self.detected_files["init.sql"]:
             for k, v in self.compose_db["environment"].items():
                 if k not in self.env_vars:
                     self.env_vars[k] = str(v)
@@ -1372,8 +1399,397 @@ class K8sDeployer:
         svc_out = self.run_command(["kubectl", "get", "svc", "-n", self.namespace, "-o", "wide"])
         print(svc_out)
 
-        if self.detected_files["init.sql"]:
+        # Only retry database initialization if both init.sql AND database service exist
+        if self.detected_files["init.sql"] and self.compose_db:
             self._retry_db_init_if_needed()
+
+    def check_ingress_controller(self):
+        """Check if ingress controller is installed and running"""
+        try:
+            # Check for nginx ingress controller
+            result = self.run_command(["kubectl", "get", "pods", "-n", "ingress-nginx", "-l", "app.kubernetes.io/component=controller"])
+            if "ingress-nginx-controller" in result and "Running" in result:
+                return True, "nginx"
+        except Exception:
+            pass
+        
+        try:
+            # Check for other common ingress controllers
+            result = self.run_command(["kubectl", "get", "pods", "-A", "-l", "app.kubernetes.io/name=ingress-nginx"])
+            if result and "Running" in result:
+                return True, "nginx"
+        except Exception:
+            pass
+        
+        return False, None
+
+    def install_ingress_controller(self):
+        """Install NGINX ingress controller based on cluster type"""
+        print_step("Installing NGINX Ingress Controller")
+        
+        if self.cluster_type == "kind":
+            # Use Kind-specific ingress controller manifest
+            ingress_url = "https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml"
+        else:
+            # Use generic ingress controller manifest
+            ingress_url = "https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml"
+        
+        try:
+            self.run_command(["kubectl", "apply", "-f", ingress_url])
+            print_success("Ingress controller installation started")
+            
+            # Wait for ingress controller to be ready
+            print("Waiting for ingress controller to be ready...")
+            self.run_command(["kubectl", "wait", "--namespace", "ingress-nginx", "--for=condition=ready", "pod", "--selector=app.kubernetes.io/component=controller", "--timeout=120s"])
+            print_success("Ingress controller is ready")
+            return True
+        except Exception as e:
+            print_error(f"Failed to install ingress controller: {e}")
+            return False
+
+    def check_ssl_requirements(self):
+        """Check if SSL is required based on Dockerfiles and existing SSL folders"""
+        ssl_required = False
+        ssl_folder_exists = False
+        dockerfile_exposes_443 = False
+        
+        # Check for existing SSL folder
+        ssl_dir = os.path.join(self.repo_dir, "ssl")
+        if os.path.exists(ssl_dir) and os.path.isdir(ssl_dir):
+            ssl_folder_exists = True
+            print_success(f"SSL folder found at: {ssl_dir}")
+        
+        # Check Dockerfiles for port 443 or SSL-related content
+        for dockerfile_path in self.detected_files["Dockerfile"]:
+            try:
+                with open(dockerfile_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read().lower()
+                    
+                # Check for port 443 exposure
+                if "expose" in content and ("443" in content or "https" in content):
+                    dockerfile_exposes_443 = True
+                    print_success(f"SSL/HTTPS detected in Dockerfile: {dockerfile_path}")
+                
+                # Check for SSL-related keywords
+                ssl_keywords = ["ssl", "tls", "https", "certificate", "cert", "key", "openssl"]
+                if any(keyword in content for keyword in ssl_keywords):
+                    ssl_required = True
+                    print_success(f"SSL configuration detected in Dockerfile: {dockerfile_path}")
+                    
+            except Exception as e:
+                print_warning(f"Could not read Dockerfile {dockerfile_path}: {e}")
+        
+        # Also check for SSL-related files in the repository
+        ssl_files = []
+        for root, dirs, files in os.walk(self.repo_dir):
+            for file in files:
+                if file.lower().endswith(('.key', '.crt', '.pem', '.p12')) or 'ssl' in file.lower() or 'cert' in file.lower():
+                    ssl_files.append(os.path.join(root, file))
+        
+        if ssl_files:
+            print_success(f"SSL-related files found: {len(ssl_files)} files")
+            ssl_required = True
+        
+        return ssl_required or dockerfile_exposes_443 or ssl_folder_exists, ssl_folder_exists, dockerfile_exposes_443, ssl_files
+
+    def find_existing_ssl_certificates(self):
+        """Find existing SSL certificates in the SSL folder"""
+        ssl_dir = os.path.join(self.repo_dir, "ssl")
+        certificates = {"key": None, "cert": None, "ca": None}
+        
+        if not os.path.exists(ssl_dir):
+            return certificates
+        
+        # Look for certificate files
+        for file in os.listdir(ssl_dir):
+            file_path = os.path.join(ssl_dir, file)
+            if os.path.isfile(file_path):
+                file_lower = file.lower()
+                if file_lower.endswith('.key') and 'key' in file_lower:
+                    certificates["key"] = file_path
+                elif file_lower.endswith('.crt') and ('cert' in file_lower or file_lower.startswith(self.repo_name.lower())):
+                    certificates["cert"] = file_path
+                elif file_lower.endswith('.pem') and ('ca' in file_lower or 'bundle' in file_lower):
+                    certificates["ca"] = file_path
+        
+        return certificates
+
+    def create_ssl_certificate(self, force_create=False):
+        """Create SSL certificate for the application if required"""
+        # Check if SSL is required
+        ssl_required, ssl_folder_exists, dockerfile_exposes_443, ssl_files = self.check_ssl_requirements()
+        
+        if not ssl_required and not force_create:
+            print_warning("SSL requirements not detected. Skipping SSL certificate creation.")
+            print_warning("Use --ingress flag to force SSL setup for ingress.")
+            return None, None
+        
+        print_step("Creating SSL Certificate")
+        
+        # Check for existing certificates first
+        existing_certs = self.find_existing_ssl_certificates()
+        if existing_certs["key"] and existing_certs["cert"]:
+            print_success("Using existing SSL certificates:")
+            print(f"  Key: {existing_certs['key']}")
+            print(f"  Cert: {existing_certs['cert']}")
+            return existing_certs["key"], existing_certs["cert"]
+        
+        # Create SSL directory if it doesn't exist
+        ssl_dir = os.path.join(self.repo_dir, "ssl")
+        os.makedirs(ssl_dir, exist_ok=True)
+        
+        # Generate certificate paths
+        key_path = os.path.join(ssl_dir, f"{self.repo_name}.key")
+        crt_path = os.path.join(ssl_dir, f"{self.repo_name}.crt")
+        
+        # Check if certificates already exist
+        if os.path.exists(key_path) and os.path.exists(crt_path):
+            print_success("SSL certificates already exist")
+            return key_path, crt_path
+        
+        hostname = f"{self.repo_name}.localhost"
+        
+        try:
+            # Generate self-signed certificate with extended information
+            cmd = [
+                "openssl", "req", "-x509", "-nodes", "-days", "365",
+                "-newkey", "rsa:2048",
+                "-keyout", key_path,
+                "-out", crt_path,
+                "-subj", f"/C=US/ST=State/L=City/O={self.repo_name.title()}/OU=IT Department/CN={hostname}"
+            ]
+            self.run_command(cmd)
+            print_success(f"SSL certificate created for {hostname}")
+            print(f"  Certificate: {crt_path}")
+            print(f"  Private Key: {key_path}")
+            
+            # Also create a PEM bundle for convenience
+            pem_path = os.path.join(ssl_dir, f"{self.repo_name}.pem")
+            with open(pem_path, "w") as pem_file:
+                with open(crt_path, "r") as cert_file:
+                    pem_file.write(cert_file.read())
+                with open(key_path, "r") as key_file:
+                    pem_file.write(key_file.read())
+            print_success(f"SSL bundle created: {pem_path}")
+            
+            return key_path, crt_path
+        except Exception as e:
+            print_error(f"Failed to create SSL certificate: {e}")
+            return None, None
+
+    def update_hosts_file(self):
+        """Update /etc/hosts file with application hostname"""
+        hostname = f"{self.repo_name}.localhost"
+        
+        try:
+            # Check if hostname already exists in /etc/hosts
+            with open("/etc/hosts", "r") as f:
+                hosts_content = f.read()
+                if hostname in hosts_content:
+                    print_success(f"Hostname {hostname} already exists in /etc/hosts")
+                    return True
+            
+            # Add hostname to /etc/hosts
+            hosts_entry = f"127.0.0.1 {hostname}"
+            cmd = ["echo", hosts_entry, "|", "sudo", "tee", "-a", "/etc/hosts"]
+            self.run_command(["bash", "-c", f"echo '{hosts_entry}' | sudo tee -a /etc/hosts"])
+            print_success(f"Added {hostname} to /etc/hosts")
+            return True
+        except Exception as e:
+            print_warning(f"Failed to update /etc/hosts: {e}")
+            print_warning(f"Please manually add: '127.0.0.1 {hostname}'")
+            return False
+
+    def patch_ingress_with_hostname(self):
+        """Patch existing ingress to use unique hostname and SSL"""
+        print_step("Patching Ingress Configuration")
+        
+        ingress_name = f"{self.repo_name}-ingress"
+        
+        try:
+            # Check if ingress exists
+            result = self.run_command(["kubectl", "get", "ingress", ingress_name, "-n", self.namespace])
+        except Exception:
+            print_warning(f"Ingress {ingress_name} not found")
+            return False
+        
+        hostname = f"{self.repo_name}.localhost"
+        
+        # Create SSL certificate (force creation for ingress setup)
+        key_path, crt_path = self.create_ssl_certificate(force_create=True)
+        if key_path and crt_path:
+            # Create TLS secret
+            secret_name = f"{self.repo_name}-tls"
+            try:
+                self.run_command(["kubectl", "create", "secret", "tls", secret_name, 
+                               f"--cert={crt_path}", f"--key={key_path}", "-n", self.namespace])
+                print_success(f"Created TLS secret: {secret_name}")
+                
+                # Patch ingress with hostname and TLS
+                patch_spec = {
+                    "spec": {
+                        "rules": [{
+                            "host": hostname,
+                            "http": {
+                                "paths": [{
+                                    "backend": {
+                                        "service": {
+                                            "name": f"{self.repo_name}-service",
+                                            "port": {"number": 3000}
+                                        }
+                                    },
+                                    "path": "/",
+                                    "pathType": "Prefix"
+                                }]
+                            }
+                        }],
+                        "tls": [{
+                            "hosts": [hostname],
+                            "secretName": secret_name
+                        }]
+                    }
+                }
+                
+                import json
+                patch_json = json.dumps(patch_spec)
+                self.run_command(["kubectl", "patch", "ingress", ingress_name, "-n", self.namespace, 
+                               "--type=merge", "-p", patch_json])
+                print_success(f"Patched ingress with hostname: {hostname}")
+                return True
+                
+            except Exception as e:
+                print_error(f"Failed to patch ingress with TLS: {e}")
+                return False
+        else:
+            # Patch without TLS
+            patch_spec = {
+                "spec": {
+                    "rules": [{
+                        "host": hostname,
+                        "http": {
+                            "paths": [{
+                                "backend": {
+                                    "service": {
+                                        "name": f"{self.repo_name}-service",
+                                        "port": {"number": 3000}
+                                    }
+                                },
+                                "path": "/",
+                                "pathType": "Prefix"
+                            }]
+                        }
+                    }]
+                }
+            }
+            
+            import json
+            patch_json = json.dumps(patch_spec)
+            try:
+                self.run_command(["kubectl", "patch", "ingress", ingress_name, "-n", self.namespace, 
+                               "--type=merge", "-p", patch_json])
+                print_success(f"Patched ingress with hostname: {hostname}")
+                return True
+            except Exception as e:
+                print_error(f"Failed to patch ingress: {e}")
+                return False
+
+    def setup_port_forwarding(self):
+        """Setup port forwarding for ingress access"""
+        print_step("Setting up Port Forwarding")
+        
+        # Kill existing port forwarding processes
+        try:
+            self.run_command(["pkill", "-f", "kubectl.*port-forward.*ingress-nginx"])
+        except Exception:
+            pass
+        
+        # Setup HTTP port forwarding
+        try:
+            # Start port forwarding in background
+            cmd = ["kubectl", "port-forward", "-n", "ingress-nginx", "svc/ingress-nginx-controller", "8080:80"]
+            self.run_command(["nohup", "bash", "-c", f"{' '.join(cmd)} > /dev/null 2>&1 &"])
+            print_success("Port forwarding started: localhost:8080 -> ingress controller")
+            
+            # Setup HTTPS port forwarding if SSL is configured
+            hostname = f"{self.repo_name}.localhost"
+            try:
+                https_cmd = ["kubectl", "port-forward", "-n", "ingress-nginx", "svc/ingress-nginx-controller", "8443:443"]
+                self.run_command(["nohup", "bash", "-c", f"{' '.join(https_cmd)} > /dev/null 2>&1 &"])
+                print_success("HTTPS port forwarding started: localhost:8443 -> ingress controller")
+            except Exception:
+                pass
+            
+            return True
+        except Exception as e:
+            print_error(f"Failed to setup port forwarding: {e}")
+            return False
+
+    def print_access_info(self):
+        """Print access information for the deployed application"""
+        hostname = f"{self.repo_name}.localhost"
+        
+        print_step("Access Information")
+        print(f"\n{Colors.OKGREEN}🚀 Your application is now accessible!{Colors.ENDC}")
+        print(f"\n{Colors.BOLD}Application URLs:{Colors.ENDC}")
+        print(f"  📱 {Colors.OKBLUE}HTTP:{Colors.ENDC}  http://{hostname}:8080")
+        print(f"  🔒 {Colors.OKBLUE}HTTPS:{Colors.ENDC} https://{hostname}:8443 (if SSL configured)")
+        print(f"  🌐 {Colors.OKBLUE}Direct:{Colors.ENDC} http://{hostname}:30030")
+        
+        print(f"\n{Colors.BOLD}Alternative Access:{Colors.ENDC}")
+        print(f"  📱 http://localhost:8080")
+        print(f"  🌐 http://localhost:30030")
+        
+        print(f"\n{Colors.BOLD}Service Information:{Colors.ENDC}")
+        print(f"  📍 Namespace: {self.namespace}")
+        print(f"  🔧 Service: {self.repo_name}-service")
+        print(f"  🌉 Ingress: {self.repo_name}-ingress")
+        print(f"  🏷️  Hostname: {hostname}")
+        
+        print(f"\n{Colors.BOLD}Port Forwarding:{Colors.ENDC}")
+        print(f"  🔄 HTTP: localhost:8080 → ingress controller")
+        print(f"  🔄 HTTPS: localhost:8443 → ingress controller")
+        
+        print(f"\n{Colors.BOLD}Management Commands:{Colors.ENDC}")
+        print(f"  📊 Check status: kubectl get pods -n {self.namespace}")
+        print(f"  🌐 Check ingress: kubectl get ingress -n {self.namespace}")
+        print(f"  🔄 Restart port-forward: kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80 &")
+        
+        print(f"\n{Colors.OKGREEN}✨ Happy deploying!{Colors.ENDC}\n")
+
+    def setup_ingress_access(self):
+        """Main method to setup complete ingress access"""
+        print_step("Setting Up Ingress Access")
+        
+        # Check if ingress controller is installed
+        ingress_installed, ingress_type = self.check_ingress_controller()
+        
+        if not ingress_installed:
+            print_warning("No ingress controller found. Installing NGINX ingress controller...")
+            if not self.install_ingress_controller():
+                print_error("Failed to install ingress controller")
+                return False
+        else:
+            print_success(f"Ingress controller found: {ingress_type}")
+        
+        # Update hosts file
+        self.update_hosts_file()
+        
+        # Patch ingress with hostname and SSL
+        if not self.patch_ingress_with_hostname():
+            print_error("Failed to patch ingress")
+            return False
+        
+        # Setup port forwarding
+        self.setup_port_forwarding()
+        
+        # Wait a bit for everything to settle
+        import time
+        time.sleep(3)
+        
+        # Print access information
+        self.print_access_info()
+        
+        return True
 
     def run(self):
         try:
@@ -1389,6 +1805,8 @@ class K8sDeployer:
             self.load_images()
             self.generate_manifests()
             self.deploy_to_cluster()
+            if self.setup_ingress:
+                self.setup_ingress_access()
         except Exception as exc:
             print_error(f"An error occurred: {str(exc)}")
             import traceback
@@ -1407,6 +1825,7 @@ def main():
     parser.add_argument("--apply", action="store_true", help="Auto-apply manifests in non-interactive mode")
     parser.add_argument("--db-pvc-size", default="1Gi", help="PVC size (default: 1Gi)")
     parser.add_argument("--no-db-pvc", action="store_true", help="Disable DB PVC creation")
+    parser.add_argument("--ingress", action="store_true", help="Setup/patch ingress after deployment")
     args = parser.parse_args()
 
     deployer = K8sDeployer()
@@ -1418,6 +1837,7 @@ def main():
     deployer.auto_apply = args.apply
     deployer.db_pvc_size = args.db_pvc_size
     deployer.db_pvc_enabled = not args.no_db_pvc
+    deployer.setup_ingress = args.ingress
 
     deployer.run()
 
