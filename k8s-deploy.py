@@ -177,6 +177,7 @@ class K8sDeployer:
         self.db_pvc_enabled = True
         self.db_pvc_size = "1Gi"
         self.setup_ingress = False
+        self.ingress_config = {}
 
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.base_dir = ""
@@ -276,6 +277,107 @@ class K8sDeployer:
         if not answer:
             return default
         return answer == "y"
+
+    def _prompt_ingress_config(self):
+        """Interactive configuration for Ingress settings"""
+        if self.non_interactive:
+            return {
+                'enable_ingress': True,
+                'host': 'localhost',
+                'tls_enabled': False,
+                'path_prefix': '',
+                'custom_annotations': {}
+            }
+        
+        print_step("Ingress Configuration")
+        
+        # Enable/disable Ingress
+        enable_ingress = self._prompt_yes_no("Enable Ingress for external access", default=True)
+        
+        if not enable_ingress:
+            return {
+                'enable_ingress': False,
+                'host': '',
+                'tls_enabled': False,
+                'path_prefix': '',
+                'custom_annotations': {}
+            }
+        
+        # Host configuration
+        default_host = f"{self.repo_name}.localhost"
+        host = input(f"{Colors.BOLD}Enter host (default: {default_host}): {Colors.ENDC}").strip()
+        if not host:
+            host = default_host
+        
+        # TLS/SSL configuration
+        tls_enabled = self._prompt_yes_no("Enable TLS/SSL for Ingress", default=False)
+        
+        # Path prefix
+        path_prefix = input(f"{Colors.BOLD}Enter path prefix (default: /): {Colors.ENDC}").strip()
+        if not path_prefix:
+            path_prefix = "/"
+        if not path_prefix.startswith("/"):
+            path_prefix = "/" + path_prefix
+        
+        # Custom annotations
+        custom_annotations = {}
+        add_annotations = self._prompt_yes_no("Add custom Ingress annotations", default=False)
+        if add_annotations:
+            print(f"{Colors.OKCYAN}Enter annotation key-value pairs (empty line to finish):{Colors.ENDC}")
+            while True:
+                key = input(f"{Colors.BOLD}Annotation key (or press Enter to finish): {Colors.ENDC}").strip()
+                if not key:
+                    break
+                value = input(f"{Colors.BOLD}Annotation value: {Colors.ENDC}").strip()
+                custom_annotations[key] = value
+        
+        return {
+            'enable_ingress': enable_ingress,
+            'host': host,
+            'tls_enabled': tls_enabled,
+            'path_prefix': path_prefix,
+            'custom_annotations': custom_annotations
+        }
+
+    def _prompt_ssl_config(self):
+        """Interactive configuration for SSL/TLS settings"""
+        if self.non_interactive:
+            return {
+                'auto_generate': True,
+                'cert_path': '',
+                'key_path': '',
+                'ca_path': '',
+                'force_recreate': False
+            }
+        
+        print_step("SSL/TLS Configuration")
+        
+        # Auto-generate or use existing
+        auto_generate = self._prompt_yes_no("Auto-generate SSL certificates", default=True)
+        
+        if auto_generate:
+            force_recreate = self._prompt_yes_no("Force recreate existing certificates", default=False)
+            return {
+                'auto_generate': True,
+                'cert_path': '',
+                'key_path': '',
+                'ca_path': '',
+                'force_recreate': force_recreate
+            }
+        
+        # Use existing certificates
+        print(f"{Colors.OKCYAN}Provide paths to existing SSL certificates:{Colors.ENDC}")
+        cert_path = input(f"{Colors.BOLD}Certificate file path (.crt): {Colors.ENDC}").strip()
+        key_path = input(f"{Colors.BOLD}Private key file path (.key): {Colors.ENDC}").strip()
+        ca_path = input(f"{Colors.BOLD}CA bundle file path (optional): {Colors.ENDC}").strip()
+        
+        return {
+            'auto_generate': False,
+            'cert_path': cert_path,
+            'key_path': key_path,
+            'ca_path': ca_path,
+            'force_recreate': False
+        }
 
     def _extract_repo_name(self):
         base = self.repo_url.rstrip("/").split("/")[-1]
@@ -763,14 +865,25 @@ class K8sDeployer:
     def _determine_primary_service(self):
         if not self.services:
             return ""
+        # First priority: frontend service
         for svc in self.services:
-            if svc.get("component") == "frontend":
+            if svc.get("component") == "frontend" or svc.get("component") == "web":
                 return svc["name"]
+        # Second priority: web service (by name pattern)
         for svc in self.services:
-            if svc["name"] == f"{self.repo_name}-service":
+            if "web" in svc["name"] and svc["name"] != f"{self.repo_name}-db-service":
                 return svc["name"]
+        # Third priority: repo-name-service (but not db service)
+        for svc in self.services:
+            if svc["name"] == f"{self.repo_name}-service" and "db" not in svc["name"]:
+                return svc["name"]
+        # Fourth priority: backend service
         for svc in self.services:
             if svc.get("component") == "backend":
+                return svc["name"]
+        # Fallback: first service that's not a database
+        for svc in self.services:
+            if "db" not in svc["name"]:
                 return svc["name"]
         return self.services[0]["name"]
 
@@ -1069,36 +1182,77 @@ class K8sDeployer:
                     "annotations": {"kubernetes.io/ingress.class": "nginx"},
                 },
                 "spec": {
-                    "rules": [
-                        {
-                            "http": {
-                                "paths": [
-                                    {
-                                        "path": "/api",
-                                        "pathType": "Prefix",
-                                        "backend": {
-                                            "service": {
-                                                "name": backend_service_name,
-                                                "port": {"number": backend_port},
-                                            }
-                                        },
-                                    },
-                                    {
-                                        "path": "/",
-                                        "pathType": "Prefix",
-                                        "backend": {
-                                            "service": {
-                                                "name": web_service_name,
-                                                "port": {"number": web_port},
-                                            }
-                                        },
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                },
+                    "rules": []
+                }
             }
+            
+            # Add host rule if ingress_config is available
+            if hasattr(self, 'ingress_config') and self.ingress_config.get('enable_ingress'):
+                host = self.ingress_config.get('host', f"{self.repo_name}.localhost")
+                rule = {
+                    "host": host,
+                    "http": {
+                        "paths": [
+                            {
+                                "path": "/api",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": backend_service_name,
+                                        "port": {"number": backend_port},
+                                    }
+                                },
+                            },
+                            {
+                                "path": "/",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": web_service_name,
+                                        "port": {"number": web_port},
+                                    }
+                                },
+                            }
+                        ]
+                    }
+                }
+                ingress["spec"]["rules"].append(rule)
+                
+                # Add TLS if enabled
+                if self.ingress_config.get('tls_enabled'):
+                    ingress["spec"]["tls"] = [{
+                        "hosts": [host],
+                        "secretName": f"{self.repo_name}-tls"
+                    }]
+            else:
+                # Fallback to default behavior without host
+                rule = {
+                    "http": {
+                        "paths": [
+                            {
+                                "path": "/api",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": backend_service_name,
+                                        "port": {"number": backend_port},
+                                    }
+                                },
+                            },
+                            {
+                                "path": "/",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": web_service_name,
+                                        "port": {"number": web_port},
+                                    }
+                                },
+                            }
+                        ]
+                    }
+                }
+                ingress["spec"]["rules"].append(rule)
             self._write_manifest(f"{self.repo_name}-ingress.yaml", ingress)
 
         # Only create database initialization job if both init.sql AND database service are found
@@ -1448,12 +1602,20 @@ class K8sDeployer:
             return False
 
     def check_ssl_requirements(self):
-        """Check if SSL is required based on Dockerfiles and existing SSL folders"""
+        """Check if SSL is required based on repo_dir: ssl folder, generate-ssl.sh, Dockerfiles, and SSL-related files"""
         ssl_required = False
         ssl_folder_exists = False
         dockerfile_exposes_443 = False
-        
-        # Check for existing SSL folder
+
+        # Check for SSL generation script in repo_dir (e.g. Keypouch generate-ssl.sh)
+        for script_name in ("generate-ssl.sh", "generate_ssl.sh"):
+            gen_script = os.path.join(self.repo_dir, script_name)
+            if os.path.isfile(gen_script):
+                ssl_required = True
+                print_success(f"SSL generation script found in repo_dir: {gen_script}")
+                break
+
+        # Check for existing SSL folder in repo_dir
         ssl_dir = os.path.join(self.repo_dir, "ssl")
         if os.path.exists(ssl_dir) and os.path.isdir(ssl_dir):
             ssl_folder_exists = True
@@ -1795,7 +1957,12 @@ class K8sDeployer:
         try:
             self.get_github_repo()
             self.clone_repo()
-            self.ensure_ssl_certs()
+            
+            # Interactive SSL configuration
+            ssl_config = self._prompt_ssl_config()
+            if ssl_config['auto_generate']:
+                self.ensure_ssl_certs()
+            
             self.scan_repo()
             self.patch_vite_proxy()
             self.ensure_web_env_exists()
@@ -1803,9 +1970,16 @@ class K8sDeployer:
             self.build_images()
             self.detect_cluster()
             self.load_images()
+            
+            # Interactive Ingress configuration
+            ingress_config = self._prompt_ingress_config()
+            self.ingress_config = ingress_config
+            
             self.generate_manifests()
             self.deploy_to_cluster()
-            if self.setup_ingress:
+            
+            # Setup Ingress access if enabled
+            if ingress_config['enable_ingress']:
                 self.setup_ingress_access()
         except Exception as exc:
             print_error(f"An error occurred: {str(exc)}")
