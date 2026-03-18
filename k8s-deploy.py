@@ -1133,26 +1133,30 @@ class K8sDeployer:
 
         self.primary_service_name = self._determine_primary_service()
 
+        # Determine service names for Ingress routing
+        web_service_name = None
+        web_port = 3000
+        backend_service_name = None
+        backend_port = 5001
+        
+        for svc in self.services:
+            if svc.get("component") == "frontend" or svc.get("component") == "web":
+                web_service_name = svc["name"]
+                if svc["ports"]:
+                    web_port = svc["ports"][0]
+            if svc.get("component") == "backend":
+                backend_service_name = svc["name"]
+                if svc["ports"]:
+                    backend_port = svc["ports"][0]
+        
+        # Fallbacks
+        if not web_service_name:
+            web_service_name = self.primary_service_name
+        if not backend_service_name:
+            backend_service_name = self.primary_service_name
+
         if self.detected_files["nginx.conf"] and self.primary_service_name:
             primary_port = 80
-            web_service_name = None
-            web_port = 3000
-            backend_service_name = None
-            backend_port = 5001
-            for svc in self.services:
-                if svc.get("component") == "frontend" or svc.get("component") == "web":
-                    web_service_name = svc["name"]
-                    if svc["ports"]:
-                        web_port = svc["ports"][0]
-                if svc.get("component") == "backend":
-                    backend_service_name = svc["name"]
-                    if svc["ports"]:
-                        backend_port = svc["ports"][0]
-            # Fallbacks
-            if not web_service_name:
-                web_service_name = self.primary_service_name
-            if not backend_service_name:
-                backend_service_name = self.primary_service_name
 
             nginx_source = self.detected_files["nginx.conf"][0]
             with open(nginx_source, "r", encoding="utf-8", errors="ignore") as handle:
@@ -1173,87 +1177,88 @@ class K8sDeployer:
                         )
                         self._add_nginx_mount_to_deployment_manifest(f"{deployment_name}.yaml")
 
-            ingress = {
-                "apiVersion": "networking.k8s.io/v1",
-                "kind": "Ingress",
-                "metadata": {
-                    "name": f"{self.repo_name}-ingress",
-                    "namespace": self.namespace,
-                    "annotations": {"kubernetes.io/ingress.class": "nginx"},
-                },
-                "spec": {
-                    "rules": []
+        # Generate Ingress manifest (always generate when ingress_config is available)
+        ingress = {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "Ingress",
+            "metadata": {
+                "name": f"{self.repo_name}-ingress",
+                "namespace": self.namespace,
+                "annotations": {"kubernetes.io/ingress.class": "nginx"},
+            },
+            "spec": {
+                "rules": []
+            }
+        }
+        
+        # Add host rule if ingress_config is available
+        if hasattr(self, 'ingress_config') and self.ingress_config.get('enable_ingress'):
+            host = self.ingress_config.get('host', f"{self.repo_name}.localhost")
+            rule = {
+                "host": host,
+                "http": {
+                    "paths": [
+                        {
+                            "path": "/api",
+                            "pathType": "Prefix",
+                            "backend": {
+                                "service": {
+                                    "name": backend_service_name,
+                                    "port": {"number": backend_port},
+                                }
+                            },
+                        },
+                        {
+                            "path": "/",
+                            "pathType": "Prefix",
+                            "backend": {
+                                "service": {
+                                    "name": web_service_name,
+                                    "port": {"number": web_port},
+                                }
+                            },
+                        }
+                    ]
                 }
             }
+            ingress["spec"]["rules"].append(rule)
             
-            # Add host rule if ingress_config is available
-            if hasattr(self, 'ingress_config') and self.ingress_config.get('enable_ingress'):
-                host = self.ingress_config.get('host', f"{self.repo_name}.localhost")
-                rule = {
-                    "host": host,
-                    "http": {
-                        "paths": [
-                            {
-                                "path": "/api",
-                                "pathType": "Prefix",
-                                "backend": {
-                                    "service": {
-                                        "name": backend_service_name,
-                                        "port": {"number": backend_port},
-                                    }
-                                },
+            # Add TLS if enabled
+            if self.ingress_config.get('tls_enabled'):
+                ingress["spec"]["tls"] = [{
+                    "hosts": [host],
+                    "secretName": f"{self.repo_name}-tls"
+                }]
+        else:
+            # Fallback to default behavior without host
+            rule = {
+                "http": {
+                    "paths": [
+                        {
+                            "path": "/api",
+                            "pathType": "Prefix",
+                            "backend": {
+                                "service": {
+                                    "name": backend_service_name,
+                                    "port": {"number": backend_port},
+                                }
                             },
-                            {
-                                "path": "/",
-                                "pathType": "Prefix",
-                                "backend": {
-                                    "service": {
-                                        "name": web_service_name,
-                                        "port": {"number": web_port},
-                                    }
-                                },
-                            }
-                        ]
-                    }
-                }
-                ingress["spec"]["rules"].append(rule)
-                
-                # Add TLS if enabled
-                if self.ingress_config.get('tls_enabled'):
-                    ingress["spec"]["tls"] = [{
-                        "hosts": [host],
-                        "secretName": f"{self.repo_name}-tls"
-                    }]
-            else:
-                # Fallback to default behavior without host
-                rule = {
-                    "http": {
-                        "paths": [
-                            {
-                                "path": "/api",
-                                "pathType": "Prefix",
-                                "backend": {
-                                    "service": {
-                                        "name": backend_service_name,
-                                        "port": {"number": backend_port},
-                                    }
-                                },
+                        },
+                        {
+                            "path": "/",
+                            "pathType": "Prefix",
+                            "backend": {
+                                "service": {
+                                    "name": web_service_name,
+                                    "port": {"number": web_port},
+                                }
                             },
-                            {
-                                "path": "/",
-                                "pathType": "Prefix",
-                                "backend": {
-                                    "service": {
-                                        "name": web_service_name,
-                                        "port": {"number": web_port},
-                                    }
-                                },
-                            }
-                        ]
-                    }
+                        }
+                    ]
                 }
-                ingress["spec"]["rules"].append(rule)
-            self._write_manifest(f"{self.repo_name}-ingress.yaml", ingress)
+            }
+            ingress["spec"]["rules"].append(rule)
+        self._write_manifest(f"{self.repo_name}-ingress.yaml", ingress)
 
         # Only create database initialization job if both init.sql AND database service are found
         if self.detected_files["init.sql"] and self.compose_db:
@@ -1777,6 +1782,28 @@ class K8sDeployer:
         
         hostname = f"{self.repo_name}.localhost"
         
+        # Get correct service names for patching
+        web_service_name = None
+        web_port = 3000
+        backend_service_name = None
+        backend_port = 5000
+        
+        for svc in self.services:
+            if svc.get("component") == "frontend" or svc.get("component") == "web":
+                web_service_name = svc["name"]
+                if svc["ports"]:
+                    web_port = svc["ports"][0]
+            if svc.get("component") == "backend":
+                backend_service_name = svc["name"]
+                if svc["ports"]:
+                    backend_port = svc["ports"][0]
+        
+        # Fallbacks
+        if not web_service_name:
+            web_service_name = self.primary_service_name
+        if not backend_service_name:
+            backend_service_name = self.primary_service_name
+        
         # Create SSL certificate (force creation for ingress setup)
         key_path, crt_path = self.create_ssl_certificate(force_create=True)
         if key_path and crt_path:
@@ -1793,16 +1820,28 @@ class K8sDeployer:
                         "rules": [{
                             "host": hostname,
                             "http": {
-                                "paths": [{
-                                    "backend": {
-                                        "service": {
-                                            "name": f"{self.repo_name}-service",
-                                            "port": {"number": 3000}
+                                "paths": [
+                                    {
+                                        "path": "/",
+                                        "pathType": "Prefix",
+                                        "backend": {
+                                            "service": {
+                                                "name": web_service_name,
+                                                "port": {"number": web_port}
+                                            }
                                         }
                                     },
-                                    "path": "/",
-                                    "pathType": "Prefix"
-                                }]
+                                    {
+                                        "path": "/api",
+                                        "pathType": "Prefix",
+                                        "backend": {
+                                            "service": {
+                                                "name": backend_service_name,
+                                                "port": {"number": backend_port}
+                                            }
+                                        }
+                                    }
+                                ]
                             }
                         }],
                         "tls": [{
@@ -1829,16 +1868,28 @@ class K8sDeployer:
                     "rules": [{
                         "host": hostname,
                         "http": {
-                            "paths": [{
-                                "backend": {
-                                    "service": {
-                                        "name": f"{self.repo_name}-service",
-                                        "port": {"number": 3000}
+                            "paths": [
+                                {
+                                    "path": "/",
+                                    "pathType": "Prefix",
+                                    "backend": {
+                                        "service": {
+                                            "name": web_service_name,
+                                            "port": {"number": web_port}
+                                        }
                                     }
                                 },
-                                "path": "/",
-                                "pathType": "Prefix"
-                            }]
+                                {
+                                    "path": "/api",
+                                    "pathType": "Prefix",
+                                    "backend": {
+                                        "service": {
+                                            "name": backend_service_name,
+                                            "port": {"number": backend_port}
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }]
                 }
@@ -1972,14 +2023,24 @@ class K8sDeployer:
             self.load_images()
             
             # Interactive Ingress configuration
-            ingress_config = self._prompt_ingress_config()
-            self.ingress_config = ingress_config
+            if self.setup_ingress and self.non_interactive:
+                # Set default ingress config for non-interactive mode with --ingress flag
+                self.ingress_config = {
+                    'enable_ingress': True,
+                    'host': f"{self.repo_name}.localhost",
+                    'tls_enabled': False,
+                    'path_prefix': '/',
+                    'custom_annotations': {}
+                }
+            else:
+                ingress_config = self._prompt_ingress_config()
+                self.ingress_config = ingress_config
             
             self.generate_manifests()
             self.deploy_to_cluster()
             
             # Setup Ingress access if enabled
-            if ingress_config['enable_ingress']:
+            if self.ingress_config.get('enable_ingress'):
                 self.setup_ingress_access()
         except Exception as exc:
             print_error(f"An error occurred: {str(exc)}")
